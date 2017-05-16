@@ -6,10 +6,11 @@
  */
 import java.io.File;
 import java.io.IOException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Date;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -24,32 +25,43 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 public class DoXmlWithDOM {
-	
-	private static List nameList = new ArrayList(); 
-	private static List uiList = new ArrayList(); 
-	private static List idList = new ArrayList(); 
+
+	private static List nameList = new ArrayList();
+	private static List uiList = new ArrayList();
+	private static List uiAdapterList = new ArrayList();
+	private static List idList = new ArrayList();
+	private static String fileName = "";
 
 	public static void main(String[] args) {
-		
-		Scanner sc = new Scanner(System.in);   
-        System.out.println("加载xml:");  
-        String url = sc.next();
-        sc.close();
-        
-        File file = null;
-        if (url.contains("'")) {
-        	file = new File(url.replace("'", ""));
-		} else if(url.contains("file:")){
+
+		Scanner sc = new Scanner(System.in);
+		System.out.println("加载xml:");
+		String url = sc.next();
+		sc.close();
+
+		File file = null;
+		if (url.contains("'")) {
+			file = new File(url.replace("'", ""));
+		} else if (url.contains("file:")) {
 			file = new File(url.replace("file:", ""));
 		} else {
 			file = new File(url);
 		}
-        
+
+		// 获取文件名
+		fileName = file.getName().split(".xml")[0];
+
 		(new DoXmlWithDOM()).readXML(file);
-		
-		createName();
-		createUI();
-		createId();
+
+		//如果是要生成adapter类，布局要以“item_”开头
+		if (fileName.startsWith("item")) {
+			createAdapter(fileName);
+		//生成activity的信息	
+		} else {
+			createName();
+			createUI();
+			createId();
+		}
 	}
 
 	/*
@@ -149,29 +161,59 @@ public class DoXmlWithDOM {
 	 * 输出结果
 	 */
 	private void outResult(String name, String idValue) {
-		//处理类名
+		// 处理类名
 		if (name.contains(".")) {
 			String[] n = name.split("\\.");
-			name = n[n.length-1];
+			name = n[n.length - 1];
 		}
-		
-		//处理ID
+
+		// 处理ID
 		String[] idArr = idValue.split("/");
 		String id = idArr[1];
 
-		String result = id + " = (" + name + ") findViewById(R.id." + id + ");\n";
-		String click = id + ".setOnClickListener(this);\n";
-		
-		
-		nameList.add(name + " " + id);
+		String result = getUpperCase(id) + " = (" + name + ") findViewById(R.id." + id + ");\n";
+		String click = getUpperCase(id) + ".setOnClickListener(this);\n";
+
+		String result2 = "holder." + getUpperCase(id) + " = (" + name + ") convertView.findViewById(R.id." + id
+				+ ");\n";
+
+		nameList.add(name + " " + getUpperCase(id));
 		uiList.add(result + click);
+		uiAdapterList.add(result2);
 		idList.add(id);
 	}
-	
+
+	/**
+	 * 取控件名生成_name
+	 * 
+	 * @param name
+	 * @return
+	 */
+	private static String getUpperCase(String name) {
+
+		if (name.contains("_")) {
+			String[] ns = name.split("_");
+			String all = "";
+			for (int i = 0; i < ns.length; i++) {
+				if (i == 0) {
+					all = "_" + ns[i].substring(0, 1).toLowerCase() + ns[i].substring(1);
+				} else {
+					all += ns[i].substring(0, 1).toUpperCase() + ns[i].substring(1);
+				}
+
+			}
+			return all;
+		}
+
+		return name;
+	}
+
 	/**
 	 * 生成private值
+	 * /home/ubt/workspace/WorkSpace_LuGangTong/LuGangTong/app/src/main
+	 * /res/layouts/activity/layout/activity_add_bankcard.xml
 	 */
-	private static void createName(){
+	private static void createName() {
 		System.out.println("\n\n=========== 生成private ===========\n");
 		for (int i = 0; i < nameList.size(); i++) {
 			String name = nameList.get(i).toString();
@@ -179,11 +221,20 @@ public class DoXmlWithDOM {
 		}
 		System.out.println();
 	}
-	
+
+	private static String createNameForAdapter() {
+		String viewHolderText = "";
+		for (int i = 0; i < nameList.size(); i++) {
+			String name = nameList.get(i).toString();
+			viewHolderText += "\t\t" + name + "; \n";
+		}
+		return viewHolderText;
+	}
+
 	/**
 	 * 生成UI值
 	 */
-	private static void createUI(){
+	private static void createUI() {
 		System.out.println("=========== 生成 R.id ===========\n");
 		for (int i = 0; i < uiList.size(); i++) {
 			System.out.println(uiList.get(i).toString());
@@ -191,11 +242,18 @@ public class DoXmlWithDOM {
 		System.out.println();
 	}
 
-	
+	private static String createUIForAdapter() {
+		String str = "";
+		for (int i = 0; i < uiAdapterList.size(); i++) {
+			str += "\t\t\t" + uiAdapterList.get(i).toString();
+		}
+		return str;
+	}
+
 	/**
 	 * 生成OnClick值
 	 */
-	private static void createId(){
+	private static void createId() {
 		System.out.println("=========== 生成 onclick ===========\n");
 		for (int i = 0; i < idList.size(); i++) {
 			String id = idList.get(i).toString();
@@ -205,5 +263,104 @@ public class DoXmlWithDOM {
 		System.out.println("=========== 生成 over ===========\n");
 	}
 
-	
+	private static void createAdapter(String fileName) {
+		String adapterStr = "========================= 生成 start ========================== \n"
+				+ "import android.content.Context; \n" + "import android.view.LayoutInflater; \n"
+				+ "import android.view.View; \n" + "import android.view.ViewGroup; \n"
+				+ "import android.widget.BaseAdapter; \n" + "import android.widget.TextView; \n\n" +
+
+				"import java.util.ArrayList; \n\n" +
+
+				"/** \n" + " * @Info \n" + " * @Auth Bello \n" + " * @Time "
+				+ getTime()
+				+ " \n"
+				+ " * @Ver \n"
+				+ " */ \n"
+				+ "public class "
+				+ getAdapterClassName(fileName)
+				+ " extends BaseAdapter { \n"
+				+ "\tprivate Context mContext; \n"
+				+ "\tprivate ArrayList<T> mListItems; \n\n"
+				+
+
+				"\tpublic "
+				+ getAdapterClassName(fileName)
+				+ "(Context mContext, ArrayList<T> mListItems) { \n"
+				+ "\t\tthis.mContext = mContext; \n"
+				+ "\t\tthis.mListItems = mListItems; \n"
+				+ "\t} \n\n"
+				+
+
+				"\t@Override \n"
+				+ "\tpublic int getCount() { \n"
+				+ "\t\treturn mListItems.size(); \n"
+				+ "\t} \n\n"
+				+
+
+				"\t@Override \n"
+				+ "\tpublic Object getItem(int position) { \n"
+				+ "\t\treturn mListItems.get(position); \n"
+				+ "\t} \n\n"
+				+
+
+				"\t@Override \n"
+				+ "\tpublic long getItemId(int position) { \n"
+				+ "\t\treturn position; \n"
+				+ "\t} \n\n"
+				+
+
+				"\t@Override \n"
+				+ "\tpublic View getView(int position, View convertView, ViewGroup parent) { \n"
+				+ "\t\tViewHolder holder; \n"
+				+ "\t\tif (convertView == null){ \n"
+				+ "\t\t\tconvertView = LayoutInflater.from(mContext).inflate(R.layout."
+				+ fileName
+				+ ", null); \n"
+				+ "\t\t\tholder = new ViewHolder(); \n"
+				+
+
+				createUIForAdapter()
+				+
+
+				"\t\t\tconvertView.setTag(holder); \n"
+				+ "\t\t} else { \n"
+				+ "\t\t\tholder = (ViewHolder) convertView.getTag(); \n"
+				+ "\t\t} \n\n"
+				+
+
+				"\t\t// TODO \n\n"
+				+
+
+				"\t\treturn convertView; \n"
+				+ "\t} \n\n"
+				+
+
+				"\tclass ViewHolder { \n"
+				+ createNameForAdapter()
+				+ "\t} \n"
+				+ "} \n\n"
+				+ "=============== 生成 over ================";
+
+		System.out.println(adapterStr);
+
+	}
+
+	/**
+	 * 获取当前时间
+	 * 
+	 * @return
+	 */
+	public static String getTime() {
+		Date date = new Date();
+		DateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		return format.format(date);
+	}
+
+	public static String getAdapterClassName(String name) {
+		name = getUpperCase(name).replace("_", "");
+		if (name.contains("item")) {
+			name = name.replace("item", "");
+		}
+		return name + "Adapter";
+	}
 }
